@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>T5 Rezervări</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #dfeaed;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .calendar {
+      background: #2b4450;
+      width: 380px;
+      height: 520px;
+      border-radius: 8px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, .3);
+      transition: .9s;
+      transform-style: preserve-3d;
+      perspective: 1200px;
+      position: relative;
+    }
+
+    .front, .back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      color: #fff;
+      backface-visibility: hidden;
+      border-radius: 8px;
+    }
+
+    .front { transform: rotateY(0deg); }
+    .back  { transform: rotateY(180deg); background: #2b4450; }
+    .flip  { transform: rotateY(180deg); }
+
+    .header {
+      padding: 20px 30px;
+      border-bottom: 1px solid rgba(255,255,255,.2);
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+      align-items: center;
+    }
+
+    .header h1 { font-size: 1.4em; color: #dfebed; }
+    .weekdays {
+      display: flex;
+      justify-content: space-between;
+      color: #dfebed;
+      font-weight: 600;
+      padding: 15px 25px;
+    }
+
+    .days {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 10px 25px;
+    }
+
+    .days span {
+      width: 14%;
+      text-align: center;
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: .2s;
+    }
+
+    .days span:hover  { background: #497285; }
+    .days span.active { background: #f78536; }
+    .days span.past   { opacity: .4; cursor: not-allowed; }
+
+    .back h2 {
+      text-align: center;
+      padding: 15px 0;
+      font-weight: 400;
+    }
+
+    .slots {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      padding: 10px;
+      overflow-y: auto;
+      height: 390px;
+      justify-items: center;
+    }
+
+    .slot {
+      width: 55px;
+      height: 55px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      cursor: pointer;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      transition: .2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,.2);
+    }
+
+    .slot:hover { transform: scale(1.05); }
+    .slot.full  { cursor: not-allowed; opacity: 0.7; box-shadow: none; }
+
+    .back button {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      padding: 15px 0;
+      background: #f78536;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      transition: .2s;
+    }
+
+    .back button:hover { background: #ff974d; }
+  </style>
+</head>
+
+<body>
+  <div class="calendar" id="cal">
+    <!-- Fața: calendarul propriu-zis -->
+    <div class="front">
+      <div class="header">
+        <h1 id="luna"></h1>
+        <h1 id="an" style="font-size:1em;opacity:.7"></h1>
+      </div>
+
+      <div class="weekdays">
+        <span>Lu</span><span>Ma</span><span>Mi</span>
+        <span>Jo</span><span>Vi</span><span>Sâ</span><span>Du</span>
+      </div>
+
+      <div class="days" id="zile"></div>
+    </div>
+
+    <!-- Spatele: orele și mașinile -->
+    <div class="back">
+      <h2 id="dataSelectata">Data aleasă</h2>
+      <div class="slots" id="ore"></div>
+      <button id="back">Înapoi</button>
+    </div>
+  </div>
+
+  <script>
+    const BASE = "http://127.0.0.1:5000";
+    const luni = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie",
+                  "Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+
+    const cal      = document.getElementById("cal");
+    const zile     = document.getElementById("zile");
+    const ore      = document.getElementById("ore");
+    const lunaLbl  = document.getElementById("luna");
+    const anLbl    = document.getElementById("an");
+    const dataLbl  = document.getElementById("dataSelectata");
+
+    let curenta    = new Date();
+    let currentDate = null;
+    let timeslotData = [];
+
+    // --- Construiește calendarul lunii curente ---
+    function arataCalendar() {
+      const luna = curenta.getMonth();
+      const an   = curenta.getFullYear();
+
+      lunaLbl.textContent = luni[luna];
+      anLbl.textContent   = an;
+      zile.innerHTML = "";
+
+      const prima = new Date(an, luna, 1).getDay() || 7;
+      const ultima = new Date(an, luna + 1, 0).getDate();
+      const azi = new Date(); azi.setHours(0, 0, 0, 0);
+
+      for (let i = 1; i < prima; i++) {
+        const gol = document.createElement("span");
+        gol.style.opacity = ".3";
+        zile.appendChild(gol);
+      }
+
+      for (let d = 1; d <= ultima; d++) {
+        const s = document.createElement("span");
+        s.textContent = d;
+
+        const data = new Date(an, luna, d);
+        data.setHours(0, 0, 0, 0);
+
+        if (data < azi) s.classList.add("past");
+        else s.onclick = () => deschide(an, luna, d);
+
+        zile.appendChild(s);
+      }
+    }
+
+    // --- Deschide o zi și încarcă orele disponibile ---
+    async function deschide(an, luna, zi) {
+      const data = `${an}-${String(luna + 1).padStart(2, '0')}-${String(zi).padStart(2, '0')}`;
+      dataLbl.textContent = `${zi} ${luni[luna]} ${an}`;
+      cal.classList.add("flip");
+      currentDate = data;
+      await incarcaOre(data);
+    }
+
+    // --- Încarcă orele și mașinile din backend ---
+    async function incarcaOre(data) {
+      ore.innerHTML = "<p style='color:#dfebed;'>Se încarcă...</p>";
+
+      try {
+        const res = await fetch(`${BASE}/api/timeslots?date=${data}`, { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const info = await res.json();
+        timeslotData = info.timeslots;
+        renderOre(info.timeslots);
+      } catch (error) {
+        console.error("Eroare:", error);
+        ore.innerHTML = "<p style='color:red'>Eroare la încărcare</p>";
+      }
+    }
+
+    // --- Culoare în funcție de gradul de ocupare ---
+    function culoareGrad(nrOcupate) {
+      switch (nrOcupate) {
+        case 4: return "#e74c3c"; // roșu
+        case 3: return "#e67e22"; // portocaliu
+        case 2: return "#f1c40f"; // galben
+        case 1: return "#2ecc71aa"; // verde pal
+        default: return "#27ae60";  // verde intens
+      }
+    }
+
+    // --- Afișează grila de ore ---
+    function renderOre(slots) {
+      ore.innerHTML = "";
+
+      slots.forEach(s => {
+        const ocupate = s.machines.filter(m => m.booked).length;
+        const full = ocupate === 4;
+
+        const slotDiv = document.createElement("div");
+        slotDiv.textContent = s.time;
+        slotDiv.className = `slot ${full ? 'full' : ''}`;
+        slotDiv.style.background = culoareGrad(ocupate);
+
+        if (!full) slotDiv.onclick = () => alegeMasina(s);
+        ore.appendChild(slotDiv);
+      });
+    }
+
+    // --- Popup pentru alegerea mașinii ---
+    async function alegeMasina(slot) {
+      const html = slot.machines.map(m => {
+        if (m.booked) {
+          return `
+            <button class="swal2-confirm swal2-styled" disabled
+              style="margin:5px;background:#ddd;cursor:not-allowed;
+                     color:#e74c3c;font-weight:bold;">
+              ${m.booked_by || ''}
+            </button>`;
+        } else {
+          return `
+            <button class="swal2-confirm swal2-styled"
+              onclick="window.selectMachine('${slot.time}','${m.name}')"
+              style="margin:5px;background:#3085d6;">
+              ${m.name}
+            </button>`;
+        }
+      }).join('');
+
+      await Swal.fire({
+        title: `Alege mașina pentru ora ${slot.time}`,
+        html,
+        showConfirmButton: false
+      });
+    }
+
+    // --- Confirmare rezervare ---
+    window.selectMachine = async (time, machine) => {
+      const camera = localStorage.getItem("camera");
+      if (!camera) return Swal.fire("Eroare", "Camera nu este setată!", "error");
+
+      const confirm = await Swal.fire({
+        title: "Confirmi rezervarea?",
+        text: `${machine} la ora ${time} pe ${currentDate}`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Da",
+        cancelButtonText: "Nu"
+      });
+
+      if (confirm.isConfirmed)
+        await rezervare(currentDate, time, machine, camera);
+    };
+
+    // --- Trimite rezervarea către server ---
+    async function rezervare(date, time, machine, room) {
+      try {
+        const res = await fetch(`${BASE}/api/book`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date, time, machine, room }),
+          credentials: "include"
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          Swal.fire("Succes", "Rezervare efectuată!", "success");
+          await incarcaOre(date);
+        } else {
+          Swal.fire("Eroare", data.error, "error");
+        }
+      } catch (e) {
+        Swal.fire("Eroare", "Serverul nu răspunde", "error");
+      }
+    }
+
+    // --- Butonul de întoarcere ---
+    document.getElementById("back").addEventListener("click", () => cal.classList.remove("flip"));
+
+    // Pornește calendarul
+    arataCalendar();
+  </script>
+</body>
+</html>
