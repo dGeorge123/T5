@@ -3,9 +3,6 @@ import sqlite3, os, re
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from flask_cors import CORS
-@app.route("/health")
-def health():
-    return "ok", 200
 
 # ===========================
 # CONFIGURARE DE BAZĂ
