@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T5 Rezervări</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@keyframes scutura{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-5px)}20%,40%,60%,80%{transform:translateX(5px)}}
+.err-shake{animation:scutura .5s}
+</style>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-100 to-purple-200">
+
+<div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md text-center">
+<h1 class="text-2xl font-bold text-indigo-600 mb-4">T5 - Rezervări Spălătorie</h1>
+<p class="text-gray-600 mb-6">Introdu emailul autorizat și numărul camerei</p>
+
+<form id="formEmail" class="space-y-4">
+  <input type="email" id="email" required placeholder="exemplu@t5.ro"
+  class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-indigo-400 outline-none">
+
+  <input type="text" id="camera" required placeholder="Camera (ex. 204)"
+  maxlength="5"
+  class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-indigo-400 outline-none uppercase">
+
+  <div id="eroare" class="hidden text-red-500 text-center font-medium">Email invalid sau neautorizat</div>
+
+  <button type="submit"
+  class="w-full bg-indigo-600 text-white py-2 rounded-md font-semibold hover:bg-indigo-700 transition">
+  Continuă
+  </button>
+</form>
+</div>
+
+<script>
+const URL = "http://127.0.0.1:5000";
+const form = document.getElementById("formEmail");
+const emailInput = document.getElementById("email");
+const cameraInput = document.getElementById("camera");
+const err = document.getElementById("eroare");
+
+// Debounce pentru validare email
+let emailTimeout;
+emailInput.addEventListener("input", () => {
+    clearTimeout(emailTimeout);
+    emailTimeout = setTimeout(() => {
+        const email = emailInput.value.trim();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            emailInput.style.borderColor = "#ef4444";
+        } else {
+            emailInput.style.borderColor = "";
+        }
+    }, 300);
+});
+
+// Optimizare form submission
+form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const email = emailInput.value.trim();
+    const camera = cameraInput.value.trim();
+    
+    // Validare client-side
+    if (!email || !camera) {
+        showError("Toate câmpurile sunt obligatorii");
+        return;
+    }
+    
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError("Format email invalid");
+        return;
+    }
+    
+    // Disable form during request
+    const submitBtn = form.querySelector("button[type='submit']");
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Se verifică...";
+    
+    try {
+        const response = await fetch(`${URL}/check_email`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email})
+        });
+        
+        const data = await response.json();
+        
+        if (data.allowed) {
+            localStorage.setItem("camera", camera);
+            window.location.href = `${URL}/calendar`;
+        } else {
+            showError(data.message || "Email neautorizat");
+        }
+    } catch (error) {
+        console.error("Eroare:", error);
+        showError("Serverul nu răspunde, încearcă din nou.");
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+});
+
+function showError(message) {
+    err.textContent = message;
+    err.classList.remove("hidden");
+    err.classList.add("err-shake");
+    setTimeout(() => err.classList.remove("err-shake"), 500);
+}
+</script>
+
+</body>
+</html>
