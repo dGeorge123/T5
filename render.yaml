@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 services:
   - type: web
     name: t5-beta
@@ -6,3 +7,13 @@ services:
     buildCommand: ""
     startCommand: gunicorn app:app
     autoDeploy: true
+=======
+services:
+  - type: web
+    name: t5-beta
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: gunicorn app:app
+    autoDeploy: true
+>>>>>>> 35705e445eb7275a47d1333d5659d117538942ed

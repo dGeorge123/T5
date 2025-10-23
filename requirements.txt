@@ -1,3 +1,8 @@
+<<<<<<< HEAD
 Flask==3.0.3
 gunicorn==22.0.0
 Flask-CORS==4.0.1
+=======
+Flask==3.0.3
+gunicorn==22.0.0
+>>>>>>> 35705e445eb7275a47d1333d5659d117538942ed
