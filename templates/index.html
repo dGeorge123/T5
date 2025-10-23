@@ -38,6 +38,8 @@
   </div>
 
 <script>
+const URL = "https://t5-spalatorie.onrender.com"; // ✅ URL-ul aplicației tale live
+
 const form = document.getElementById("formEmail");
 const emailInput = document.getElementById("email");
 const cameraInput = document.getElementById("camera");
@@ -79,7 +81,7 @@ form.addEventListener("submit", async (e) => {
   btn.textContent = "Se verifică...";
 
   try {
-    const res = await fetch("/check_email", {
+    const res = await fetch(`${URL}/check_email`, {  // ✅ acum trimite la backend-ul live
       method: "POST",
       headers: {"Content-Type": "application/json"},
       credentials: "include",
@@ -92,7 +94,7 @@ form.addEventListener("submit", async (e) => {
     const data = JSON.parse(textRes);
     if (data.allowed) {
       localStorage.setItem("camera", camera);
-      window.location.href = "/calendar";
+      window.location.href = `${URL}/calendar`; // ✅ redirecționează corect
     } else {
       showError(data.message || "Email neautorizat");
     }
