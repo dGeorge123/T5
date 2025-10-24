@@ -1,11 +1,5 @@
-<<<<<<< HEAD
 bucidefier@gmail.com
 bucideaur@gmail.com
 bucifer@gmail.com
 dani@gmail.com
 mifumifu@gmail.com
-=======
-bucidefier@gmail.com
-bucideaur@gmail.com
-bucifer@gmail.com
->>>>>>> 35705e445eb7275a47d1333d5659d117538942ed

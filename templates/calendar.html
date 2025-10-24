@@ -1,18 +1,13 @@
 <!DOCTYPE html>
 <html lang="ro">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>T5 Rezervări</title>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: 'Roboto', sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; font-family: 'Roboto', sans-serif; margin: 0; padding: 0; }
 
     body {
       background: #dfeaed;
@@ -54,23 +49,6 @@
     }
 
     .header h1 { font-size: 1.4em; color: #dfebed; }
-
-    #myResBtn {
-      position: absolute;
-      top: 20px;
-      right: 25px;
-      background: #f78536;
-      color: #fff;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-weight: 500;
-      cursor: pointer;
-      font-size: 0.85em;
-      transition: background .2s;
-    }
-
-    #myResBtn:hover { background: #ff974d; }
 
     .weekdays {
       display: flex;
@@ -148,6 +126,29 @@
     }
 
     .back button:hover { background: #ff974d; }
+
+    /* Mic buton SVG în colț */
+    .my-btn {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      background: #f78536;
+      border: none;
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: all 0.25s ease;
+    }
+    .my-btn:hover {
+      background: #ff974d;
+      transform: scale(1.1);
+      box-shadow: 0 0 10px #ff974d;
+    }
   </style>
 </head>
 
@@ -157,12 +158,21 @@
       <div class="header">
         <h1 id="luna"></h1>
         <h1 id="an" style="font-size:1em;opacity:.7"></h1>
-        <button id="myResBtn">Rezervările mele</button>
+
+        <button class="my-btn" title="Rezervările mele" onclick="showMyReservations()">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+              stroke-width="2" stroke="white" width="18" height="18">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2z"/>
+          </svg>
+        </button>
       </div>
+
       <div class="weekdays">
-        <span>Lu</span><span>Ma</span><span>Mi</span><span>Jo</span>
-        <span>Vi</span><span>Sâ</span><span>Du</span>
+        <span>Lu</span><span>Ma</span><span>Mi</span>
+        <span>Jo</span><span>Vi</span><span>Sâ</span><span>Du</span>
       </div>
+
       <div class="days" id="zile"></div>
     </div>
 
@@ -177,19 +187,26 @@
     const BASE = window.location.origin;
     const luni = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie",
                   "Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
-    const cal = document.getElementById("cal"),
-          zile = document.getElementById("zile"),
-          ore = document.getElementById("ore"),
-          lunaLbl = document.getElementById("luna"),
-          anLbl = document.getElementById("an"),
-          dataLbl = document.getElementById("dataSelectata");
 
-    let curenta = new Date(), currentDate = null;
+    const cal = document.getElementById("cal");
+    const zile = document.getElementById("zile");
+    const ore = document.getElementById("ore");
+    const lunaLbl = document.getElementById("luna");
+    const anLbl = document.getElementById("an");
+    const dataLbl = document.getElementById("dataSelectata");
+
+    let curenta = new Date();
+    let currentDate = null;
 
     function arataCalendar() {
-      const luna = curenta.getMonth(), an = curenta.getFullYear();
-      lunaLbl.textContent = luni[luna]; anLbl.textContent = an; zile.innerHTML = "";
-      const prima = new Date(an, luna, 1).getDay() || 7, ultima = new Date(an, luna + 1, 0).getDate();
+      const luna = curenta.getMonth();
+      const an = curenta.getFullYear();
+      lunaLbl.textContent = luni[luna];
+      anLbl.textContent = an;
+      zile.innerHTML = "";
+
+      const prima = new Date(an, luna, 1).getDay() || 7;
+      const ultima = new Date(an, luna + 1, 0).getDate();
       const azi = new Date(); azi.setHours(0,0,0,0);
 
       for (let i = 1; i < prima; i++) {
@@ -210,7 +227,7 @@
     }
 
     async function deschide(an, luna, zi) {
-      const data = `${an}-${String(luna+1).padStart(2,'0')}-${String(zi).padStart(2,'0')}`;
+      const data = `${String(zi).padStart(2,'0')}-${String(luna+1).padStart(2,'0')}-${an}`;
       dataLbl.textContent = `${zi} ${luni[luna]} ${an}`;
       cal.classList.add("flip");
       currentDate = data;
@@ -248,22 +265,22 @@
     }
 
     async function alegeMasina(slot) {
-      const html = slot.machines.map(m =>
+      const html = slot.machines.map(m => 
         m.booked
           ? `<button class="swal2-confirm swal2-styled" disabled
-              style="margin:5px;background:#ddd;color:#e74c3c;font-weight:bold;cursor:not-allowed;">
+              style="margin:5px;background:#ddd;cursor:not-allowed;
+                     color:#e74c3c;font-weight:bold;">
               ${m.booked_by || ''}</button>`
           : `<button class="swal2-confirm swal2-styled"
               onclick="window.selectMachine('${slot.time}','${m.name}')"
               style="margin:5px;background:#3085d6;">${m.name}</button>`
       ).join('');
-      await Swal.fire({ title:`Alege mașina pentru ora ${slot.time}`, html, showConfirmButton:false });
+      await Swal.fire({ title: `Alege mașina pentru ora ${slot.time}`, html, showConfirmButton: false });
     }
 
     window.selectMachine = async (time, machine) => {
       const camera = localStorage.getItem("camera");
-      if (!camera) return Swal.fire("Eroare","Camera nu este setată!","error");
-
+      if (!camera) return Swal.fire("Eroare", "Camera nu este setată!", "error");
       const confirm = await Swal.fire({
         title: "Confirmi rezervarea?",
         text: `${machine} la ora ${time} pe ${currentDate}`,
@@ -285,30 +302,60 @@
         });
         const data = await res.json();
         if (data.success) {
-          await Swal.fire("Succes","Rezervare efectuată!","success");
+          await Swal.fire("Succes", "Rezervare efectuată!", "success");
           await incarcaOre(date);
         } else Swal.fire("Eroare", data.error, "error");
       } catch {
-        Swal.fire("Eroare","Serverul nu răspunde","error");
+        Swal.fire("Eroare", "Serverul nu răspunde", "error");
       }
     }
 
-    // 🔹 Buton Rezervările mele
-    document.getElementById("myResBtn").addEventListener("click", async () => {
+    async function showMyReservations() {
       try {
         const res = await fetch(`${BASE}/api/my_reservations`, { credentials: "include" });
         const data = await res.json();
-        if (!data.reservations.length)
-          return Swal.fire("Nicio rezervare","Nu ai nicio rezervare activă.","info");
-        const html = data.reservations
-          .map(r => `<div style='padding:6px 0;border-bottom:1px solid #eee;'>
-                      <b>${r.date}</b> — ${r.time}, ${r.machine}</div>`)
-          .join("");
-        Swal.fire({ title:"Rezervările mele", html, width:350, confirmButtonText:"OK" });
+        if (!data.success || !data.reservations.length)
+          return Swal.fire("Info", "Nu ai rezervări active.", "info");
+
+        const html = data.reservations.map(r =>
+          `<div style='padding:6px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center'>
+             <span><b>${r.date}</b> — ${r.time}, ${r.machine} (${r.room})</span>
+             <button onclick="deleteReservation(${r.id})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;">✕</button>
+           </div>`
+        ).join("");
+
+        Swal.fire({ title: "Rezervările mele", html, confirmButtonText: "OK" });
       } catch {
-        Swal.fire("Eroare","Serverul nu răspunde.","error");
+        Swal.fire("Eroare", "Nu s-au putut încărca rezervările.", "error");
       }
-    });
+    }
+
+    async function deleteReservation(id) {
+      const conf = await Swal.fire({
+        title: "Ștergi această rezervare?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Da",
+        cancelButtonText: "Nu"
+      });
+      if (!conf.isConfirmed) return;
+
+      try {
+        const res = await fetch(`${BASE}/api/delete_reservation`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          credentials: "include",
+          body: JSON.stringify({ id })
+        });
+        const data = await res.json();
+        if (data.success) {
+          Swal.fire("Ștearsă!", "Rezervarea a fost ștearsă cu succes.", "success");
+          showMyReservations();
+        } else Swal.fire("Eroare", data.error, "error");
+      } catch {
+        Swal.fire("Eroare", "Serverul nu răspunde.", "error");
+      }
+    }
 
     document.getElementById("back").addEventListener("click", () => cal.classList.remove("flip"));
     arataCalendar();
