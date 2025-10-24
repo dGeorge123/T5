@@ -185,43 +185,21 @@
 
   <script>
     const BASE = window.location.origin;
-    const luni = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie",
-                  "Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
-
-    const cal = document.getElementById("cal");
-    const zile = document.getElementById("zile");
-    const ore = document.getElementById("ore");
-    const lunaLbl = document.getElementById("luna");
-    const anLbl = document.getElementById("an");
-    const dataLbl = document.getElementById("dataSelectata");
-
-    let curenta = new Date();
-    let currentDate = null;
+    const luni = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+    const cal = document.getElementById("cal"), zile = document.getElementById("zile"), ore = document.getElementById("ore");
+    const lunaLbl = document.getElementById("luna"), anLbl = document.getElementById("an"), dataLbl = document.getElementById("dataSelectata");
+    let curenta = new Date(), currentDate = null;
 
     function arataCalendar() {
-      const luna = curenta.getMonth();
-      const an = curenta.getFullYear();
-      lunaLbl.textContent = luni[luna];
-      anLbl.textContent = an;
-      zile.innerHTML = "";
-
-      const prima = new Date(an, luna, 1).getDay() || 7;
-      const ultima = new Date(an, luna + 1, 0).getDate();
-      const azi = new Date(); azi.setHours(0,0,0,0);
-
-      for (let i = 1; i < prima; i++) {
-        const gol = document.createElement("span");
-        gol.style.opacity = ".3";
-        zile.appendChild(gol);
-      }
-
+      const luna = curenta.getMonth(), an = curenta.getFullYear();
+      lunaLbl.textContent = luni[luna]; anLbl.textContent = an; zile.innerHTML = "";
+      const prima = new Date(an, luna, 1).getDay() || 7, ultima = new Date(an, luna + 1, 0).getDate(), azi = new Date();
+      azi.setHours(0,0,0,0);
+      for (let i = 1; i < prima; i++) zile.appendChild(document.createElement("span"));
       for (let d = 1; d <= ultima; d++) {
-        const s = document.createElement("span");
-        s.textContent = d;
-        const data = new Date(an, luna, d);
-        data.setHours(0,0,0,0);
-        if (data < azi) s.classList.add("past");
-        else s.onclick = () => deschide(an, luna, d);
+        const s = document.createElement("span"); s.textContent = d;
+        const data = new Date(an, luna, d); data.setHours(0,0,0,0);
+        if (data < azi) s.classList.add("past"); else s.onclick = () => deschide(an, luna, d);
         zile.appendChild(s);
       }
     }
@@ -229,8 +207,7 @@
     async function deschide(an, luna, zi) {
       const data = `${String(zi).padStart(2,'0')}-${String(luna+1).padStart(2,'0')}-${an}`;
       dataLbl.textContent = `${zi} ${luni[luna]} ${an}`;
-      cal.classList.add("flip");
-      currentDate = data;
+      cal.classList.add("flip"); currentDate = data;
       await incarcaOre(data);
     }
 
@@ -240,14 +217,11 @@
         const res = await fetch(`${BASE}/api/timeslots?date=${data}`, { credentials: "include" });
         const info = await res.json();
         renderOre(info.timeslots);
-      } catch {
-        ore.innerHTML = "<p style='color:red'>Eroare la încărcare</p>";
-      }
+      } catch { ore.innerHTML = "<p style='color:red'>Eroare la încărcare</p>"; }
     }
 
-    function culoareGrad(nrOcupate) {
-      const culori = ["#27ae60", "#2ecc71aa", "#f1c40f", "#e67e22", "#e74c3c"];
-      return culori[nrOcupate] || "#27ae60";
+    function culoareGrad(nr) {
+      return ["#27ae60","#2ecc71aa","#f1c40f","#e67e22","#e74c3c"][nr] || "#27ae60";
     }
 
     function renderOre(slots) {
@@ -265,15 +239,10 @@
     }
 
     async function alegeMasina(slot) {
-      const html = slot.machines.map(m => 
+      const html = slot.machines.map((m,i) =>
         m.booked
-          ? `<button class="swal2-confirm swal2-styled" disabled
-              style="margin:5px;background:#ddd;cursor:not-allowed;
-                     color:#e74c3c;font-weight:bold;">
-              ${m.booked_by || ''}</button>`
-          : `<button class="swal2-confirm swal2-styled"
-              onclick="window.selectMachine('${slot.time}','${m.name}')"
-              style="margin:5px;background:#3085d6;">${m.name}</button>`
+          ? `<button class='swal2-confirm swal2-styled' disabled style='margin:5px;background:#ddd;cursor:not-allowed;color:#e74c3c;font-weight:bold;'>${m.booked_by || ''}</button>`
+          : `<button class='swal2-confirm swal2-styled' onclick="window.selectMachine('${slot.time}','Mașina ${i+1}')" style='margin:5px;background:#3085d6;'>Mașina ${i+1}</button>`
       ).join('');
       await Swal.fire({ title: `Alege mașina pentru ora ${slot.time}`, html, showConfirmButton: false });
     }
@@ -305,9 +274,7 @@
           await Swal.fire("Succes", "Rezervare efectuată!", "success");
           await incarcaOre(date);
         } else Swal.fire("Eroare", data.error, "error");
-      } catch {
-        Swal.fire("Eroare", "Serverul nu răspunde", "error");
-      }
+      } catch { Swal.fire("Eroare", "Serverul nu răspunde", "error"); }
     }
 
     async function showMyReservations() {
@@ -317,12 +284,12 @@
         if (!data.success || !data.reservations.length)
           return Swal.fire("Info", "Nu ai rezervări active.", "info");
 
-        const html = data.reservations.map(r =>
-          `<div style='padding:6px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center'>
-             <span><b>${r.date}</b> — ${r.time}, ${r.machine} (${r.room})</span>
-             <button onclick="deleteReservation(${r.id})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;">✕</button>
-           </div>`
-        ).join("");
+        const html = data.reservations.map(r => `
+          <div style='padding:6px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;font-size:14px;'>
+            <span><b>${r.date}</b> — ${r.time}, ${r.machine} (<span style='color:#777;'>${r.room}</span>)</span>
+            <button onclick="deleteReservation(${r.id})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;">✕</button>
+          </div>
+        `).join("");
 
         Swal.fire({ title: "Rezervările mele", html, confirmButtonText: "OK" });
       } catch {
@@ -349,12 +316,10 @@
         });
         const data = await res.json();
         if (data.success) {
-          Swal.fire("Ștearsă!", "Rezervarea a fost ștearsă cu succes.", "success");
+          Swal.fire("Ștearsă!", "Rezervarea a fost ștearsă.", "success");
           showMyReservations();
         } else Swal.fire("Eroare", data.error, "error");
-      } catch {
-        Swal.fire("Eroare", "Serverul nu răspunde.", "error");
-      }
+      } catch { Swal.fire("Eroare", "Serverul nu răspunde.", "error"); }
     }
 
     document.getElementById("back").addEventListener("click", () => cal.classList.remove("flip"));
