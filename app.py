@@ -1,243 +1,267 @@
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
-import sqlite3
-import os
 from datetime import datetime, timedelta
+from contextlib import contextmanager
+import sqlite3, os, re
 
-# ==========================================================
-# CONFIGURARE DE BAZĂ
-# ==========================================================
+# ======================================
+# CONFIGURARE APLICAȚIE
+# ======================================
+
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = "super-secret-key"
+
+# CORS + cookie-uri cross-origin
 CORS(app, supports_credentials=True)
 
-DB_FILE = "rezervari.db"
-ADMIN_PASSWORD = "t5admin2025"  # parolă admin
-MAX_REZERVARI_PE_ZI = 2
+# Config cookie secure pentru producție
+env = os.environ.get("DEPLOY_ENV", "development").lower()
+if env == "production":
+    app.config.update(
+        SESSION_COOKIE_SAMESITE="None",
+        SESSION_COOKIE_SECURE=True
+    )
+else:
+    app.config.update(
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=False
+    )
 
-# ==========================================================
-# INITIALIZARE BAZĂ DE DATE
-# ==========================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database.db")
+EMAIL_FILE = os.path.join(BASE_DIR, "allowed_emails.txt")
+ADMIN_PWD = os.environ.get("ADMIN_PWD", "admin1234")
+
+
+# ======================================
+# CONEXIUNE BAZĂ DE DATE
+# ======================================
+
+@contextmanager
+def get_db():
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS reservations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            camera TEXT NOT NULL,
-            date TEXT NOT NULL,
-            time TEXT NOT NULL,
-            machine TEXT NOT NULL,
-            UNIQUE(date, time, machine)
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                room TEXT NOT NULL,
+                date TEXT NOT NULL,
+                time TEXT NOT NULL,
+                machine TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(date, time, machine)
+            )
+        """)
 init_db()
 
-# ==========================================================
-# PAGINI HTML
-# ==========================================================
+
+# ======================================
+# FUNCȚII UTILE
+# ======================================
+
+def load_allowed_emails():
+    if not os.path.exists(EMAIL_FILE):
+        with open(EMAIL_FILE, "w") as f:
+            f.write("test@example.com\n")
+    with open(EMAIL_FILE, "r") as f:
+        return [line.strip().lower() for line in f if line.strip()]
+
+
+# ======================================
+# ROUTE HTML
+# ======================================
+
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
 @app.route("/calendar")
-def calendar_page():
+def calendar():
     if "email" not in session:
-        return render_template("index.html")
+        return redirect(url_for("index"))
     return render_template("calendar.html")
 
+
 @app.route("/admin")
-def admin_panel():
+def admin_page():
     return render_template("admin.html")
 
-# ==========================================================
-# RUTE API UTILIZATORI
-# ==========================================================
+
+# ======================================
+# AUTENTIFICARE EMAIL
+# ======================================
+
 @app.route("/check_email", methods=["POST"])
 def check_email():
     data = request.get_json()
-    email = data.get("email", "").strip()
+    email = data.get("email", "").strip().lower()
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return jsonify({"allowed": False, "message": "Format email invalid"})
 
-    # verifică dacă email-ul este autorizat
-    if not os.path.exists("allowed_emails.txt"):
-        return jsonify({"allowed": False, "message": "Lista de emailuri lipsește"})
-
-    with open("allowed_emails.txt") as f:
-        allowed = [e.strip().lower() for e in f.readlines()]
-
-    if email.lower() not in allowed:
+    allowed = load_allowed_emails()
+    if email in allowed:
+        session["email"] = email
+        print(f"[LOGIN ✅] {email}")
+        return jsonify({"allowed": True})
+    else:
+        print(f"[LOGIN ❌] {email}")
         return jsonify({"allowed": False, "message": "Email neautorizat"})
 
-    session["email"] = email
-    return jsonify({"allowed": True})
+
+# ======================================
+# API PRINCIPAL: TIMP / REZERVĂRI
+# ======================================
 
 @app.route("/api/timeslots")
 def timeslots():
-    date = request.args.get("date")
-    if not date:
+    if "email" not in session:
+        return jsonify({"error": "Neautentificat"}), 401
+
+    date_str = request.args.get("date")
+    if not date_str:
         return jsonify({"error": "Lipsă dată"}), 400
 
-    # intervale orare
-    ore = [f"{h:02d}:00" for h in range(8, 23)]
-    masini = ["M1", "M2", "M3", "M4"]
+    start = datetime.strptime("07:00", "%H:%M")
+    ore = [(start + timedelta(hours=i)).strftime("%H:%M") for i in range(16)]
 
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT time, machine, email FROM reservations WHERE date = ?", (date,))
-    rezervari = c.fetchall()
-    conn.close()
+    with get_db() as conn:
+        rows = conn.execute("SELECT time, machine, room FROM reservations WHERE date=?", (date_str,)).fetchall()
 
-    rezultat = []
-    for ora in ore:
-        entry = {"time": ora, "machines": []}
-        for masina in masini:
-            gasit = next((r for r in rezervari if r[0] == ora and r[1] == masina), None)
-            if gasit:
-                entry["machines"].append({"name": masina, "booked": True, "booked_by": gasit[2].split("@")[0]})
-            else:
-                entry["machines"].append({"name": masina, "booked": False})
-        rezultat.append(entry)
+    rezervari = {}
+    for r in rows:
+        rezervari.setdefault(r["time"], []).append({"machine": r["machine"], "room": r["room"]})
 
-    return jsonify({"timeslots": rezultat})
+    result = []
+    for t in ore:
+        masini = []
+        for i in range(1, 5):
+            nume = f"Mașina {i}"
+            rez = next((x for x in rezervari.get(t, []) if x["machine"] == nume), None)
+            masini.append({
+                "name": nume,
+                "booked": rez is not None,
+                "booked_by": rez["room"] if rez else None
+            })
+        result.append({"time": t, "machines": masini})
+
+    return jsonify({"success": True, "date": date_str, "timeslots": result})
+
 
 @app.route("/api/book", methods=["POST"])
 def book():
+    if "email" not in session:
+        return jsonify({"success": False, "error": "Neautentificat"}), 401
+
     data = request.get_json()
-    date = data.get("date")
-    time = data.get("time")
-    machine = data.get("machine")
-    camera = data.get("room")
-    email = session.get("email")
+    date, time, room, machine = data.get("date"), data.get("time"), data.get("room"), data.get("machine")
+    email = session["email"]
 
-    if not all([date, time, machine, camera, email]):
-        return jsonify({"success": False, "error": "Date lipsă"}), 400
+    if not all([date, time, room, machine]):
+        return jsonify({"success": False, "error": "Date incomplete"}), 400
 
-    try:
-        # nu permite rezervări în trecut
-        if datetime.strptime(date, "%d-%m-%Y") < datetime.now():
-            return jsonify({"success": False, "error": "Nu poți rezerva în trecut"}), 400
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM reservations WHERE email=? AND date=?", (email, date))
+        if cur.fetchone()[0] >= 2:
+            return jsonify({"success": False, "error": "Maxim 2 rezervări/zi"}), 400
 
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
+        try:
+            cur.execute("INSERT INTO reservations (email, room, date, time, machine) VALUES (?, ?, ?, ?, ?)",
+                        (email, room, date, time, machine))
+            print(f"[BOOKED] {email} ({room}) -> {date} {time}, {machine}")
+            return jsonify({"success": True})
+        except sqlite3.IntegrityError:
+            return jsonify({"success": False, "error": "Această mașină este deja rezervată"})
 
-        # max 2 rezervări/zi/email
-        c.execute("SELECT COUNT(*) FROM reservations WHERE email = ? AND date = ?", (email, date))
-        count = c.fetchone()[0]
-        if count >= MAX_REZERVARI_PE_ZI:
-            conn.close()
-            return jsonify({"success": False, "error": "Ai atins limita de 2 rezervări/zi"}), 400
-
-        # verifică dacă e liber
-        c.execute("SELECT * FROM reservations WHERE date = ? AND time = ? AND machine = ?", (date, time, machine))
-        if c.fetchone():
-            conn.close()
-            return jsonify({"success": False, "error": "Slotul este deja ocupat"}), 400
-
-        c.execute("INSERT INTO reservations (email, camera, date, time, machine) VALUES (?, ?, ?, ?, ?)",
-                  (email, camera, date, time, machine))
-        conn.commit()
-        conn.close()
-        return jsonify({"success": True})
-    except Exception as e:
-        print("Eroare:", e)
-        return jsonify({"success": False, "error": "Eroare la salvare"}), 500
 
 @app.route("/api/my_reservations")
 def my_reservations():
-    email = session.get("email")
-    if not email:
-        return jsonify({"success": False, "error": "Nelogat"}), 403
+    if "email" not in session:
+        return jsonify({"success": False, "error": "Neautentificat"}), 401
+    email = session["email"]
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, date, time, machine, room FROM reservations WHERE email=? ORDER BY date, time",
+            (email,)
+        ).fetchall()
+    reservations = [dict(r) for r in rows]
+    return jsonify({"success": True, "reservations": reservations})
 
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT id, date, time, machine FROM reservations WHERE email = ? ORDER BY date, time", (email,))
-    data = [{"id": r[0], "date": r[1], "time": r[2], "machine": r[3]} for r in c.fetchall()]
-    conn.close()
-    return jsonify({"success": True, "reservations": data})
 
 @app.route("/api/delete_reservation", methods=["POST"])
 def delete_reservation():
-    email = session.get("email")
-    if not email:
-        return jsonify({"success": False, "error": "Nelogat"}), 403
+    if "email" not in session:
+        return jsonify({"success": False, "error": "Neautentificat"}), 401
 
     data = request.get_json()
     rid = data.get("id")
-    if not rid:
-        return jsonify({"success": False, "error": "ID lipsă"}), 400
+    email = session["email"]
 
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("DELETE FROM reservations WHERE id = ? AND email = ?", (rid, email))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.execute("DELETE FROM reservations WHERE id=? AND email=?", (rid, email))
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "error": "Rezervarea nu există sau nu aparține utilizatorului"})
     return jsonify({"success": True})
 
-# ==========================================================
-# RUTE ADMIN
-# ==========================================================
+
+# ======================================
+# ADMIN PANEL
+# ======================================
+
 @app.route("/admin/list", methods=["POST"])
 def admin_list():
     data = request.get_json()
-    if not data or data.get("admin_password") != ADMIN_PASSWORD:
-        return jsonify({"success": False, "error": "Parolă incorectă"}), 401
+    pwd = data.get("admin_password")
+    if pwd != ADMIN_PWD:
+        return jsonify({"success": False, "error": "Parolă incorectă"}), 403
 
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT id, email, camera, date, time FROM reservations ORDER BY date, time")
-    rows = c.fetchall()
-    conn.close()
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM reservations ORDER BY date, time").fetchall()
+        result = [dict(r) for r in rows]
+    return jsonify({"success": True, "reservations": result})
 
-    reservations = [
-        {"id": r[0], "email": r[1], "camera": r[2], "data": r[3], "ora": r[4]}
-        for r in rows
-    ]
-    return jsonify({"success": True, "reservations": reservations})
 
 @app.route("/admin/delete_one", methods=["POST"])
 def admin_delete_one():
     data = request.get_json()
-    if not data or data.get("admin_password") != ADMIN_PASSWORD:
-        return jsonify({"success": False, "error": "Parolă incorectă"}), 401
-
-    rid = data.get("id")
-    if not rid:
-        return jsonify({"success": False, "error": "ID lipsă"}), 400
-
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("DELETE FROM reservations WHERE id = ?", (rid,))
-    conn.commit()
-    conn.close()
+    pwd, rid = data.get("admin_password"), data.get("id")
+    if pwd != ADMIN_PWD:
+        return jsonify({"success": False, "error": "Parolă incorectă"}), 403
+    with get_db() as conn:
+        conn.execute("DELETE FROM reservations WHERE id=?", (rid,))
     return jsonify({"success": True})
+
 
 @app.route("/admin/delete_all", methods=["POST"])
 def admin_delete_all():
     data = request.get_json()
-    if not data or data.get("admin_password") != ADMIN_PASSWORD:
-        return jsonify({"success": False, "error": "Parolă incorectă"}), 401
-
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("DELETE FROM reservations")
-    conn.commit()
-    conn.close()
+    pwd = data.get("admin_password")
+    if pwd != ADMIN_PWD:
+        return jsonify({"success": False, "error": "Parolă incorectă"}), 403
+    with get_db() as conn:
+        conn.execute("DELETE FROM reservations")
     return jsonify({"success": True})
 
-# ==========================================================
-# HEALTH CHECK (pentru Render)
-# ==========================================================
-@app.route("/health")
-def health():
-    return "OK", 200
 
-# ==========================================================
-# PORNIRE SERVER
-# ==========================================================
+# ======================================
+# RUN
+# ======================================
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    print("🚀 Server running on http://127.0.0.1:5000")
+    print("🔑 Admin password:", ADMIN_PWD)
+    app.run(host="0.0.0.0", port=5000, debug=True)
