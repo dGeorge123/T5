@@ -12,39 +12,46 @@
   <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-4xl">
     <h1 class="text-2xl font-bold text-center text-indigo-600 mb-6">T5 Admin Panel</h1>
 
+    <!-- LOGIN SECTION -->
     <div id="loginSection" class="text-center">
       <input id="adminPwd" type="password" placeholder="Introduceți parola admin"
         class="border px-4 py-2 rounded-md w-2/3 mb-4 focus:ring-2 focus:ring-indigo-400">
-      <button onclick="loginAdmin()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition">
+      <button onclick="loginAdmin()" 
+        class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition">
         Autentificare
       </button>
     </div>
 
+    <!-- ADMIN SECTION -->
     <div id="adminSection" class="hidden">
-      <div class="flex justify-between mb-4">
+      <div class="flex justify-between mb-4 items-center">
         <h2 class="text-xl font-semibold">Rezervări existente</h2>
-        <button onclick="deleteAll()" class="bg-red-600 text-white px-4 py-1 rounded-md hover:bg-red-700 transition">
+        <button onclick="deleteAll()" 
+          class="bg-red-600 text-white px-4 py-1 rounded-md hover:bg-red-700 transition">
           Șterge toate
         </button>
       </div>
 
-      <table class="w-full text-left border">
-        <thead class="bg-indigo-100 text-indigo-800">
-          <tr>
-            <th class="py-2 px-3 border">Email</th>
-            <th class="py-2 px-3 border">Cameră</th>
-            <th class="py-2 px-3 border">Data</th>
-            <th class="py-2 px-3 border">Ora</th>
-            <th class="py-2 px-3 border text-center">Acțiune</th>
-          </tr>
-        </thead>
-        <tbody id="reservationsTable" class="text-gray-700"></tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border rounded-md">
+          <thead class="bg-indigo-100 text-indigo-800">
+            <tr>
+              <th class="py-2 px-3 border">Email</th>
+              <th class="py-2 px-3 border">Cameră</th>
+              <th class="py-2 px-3 border">Data</th>
+              <th class="py-2 px-3 border">Ora</th>
+              <th class="py-2 px-3 border text-center">Acțiune</th>
+            </tr>
+          </thead>
+          <tbody id="reservationsTable" class="text-gray-700"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <script>
-    const BASE_URL = "http://127.0.0.1:5000";
+    // Detectează automat backend-ul actual (local sau Render)
+    const BASE_URL = window.location.origin;
     let adminPassword = "";
 
     async function loginAdmin() {
@@ -52,19 +59,24 @@
       if (!pwd) return Swal.fire("Eroare", "Introduceți parola", "error");
 
       adminPassword = pwd;
-      const res = await fetch(`${BASE_URL}/admin/list`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ admin_password: pwd }),
-      });
+      try {
+        const res = await fetch(`${BASE_URL}/admin/list`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ admin_password: pwd }),
+        });
 
-      const data = await res.json();
-      if (data.success) {
-        document.getElementById("loginSection").classList.add("hidden");
-        document.getElementById("adminSection").classList.remove("hidden");
-        renderReservations(data.reservations);
-      } else {
-        Swal.fire("Eroare", data.error || "Parolă incorectă", "error");
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById("loginSection").classList.add("hidden");
+          document.getElementById("adminSection").classList.remove("hidden");
+          renderReservations(data.reservations);
+        } else {
+          Swal.fire("Eroare", data.error || "Parolă incorectă", "error");
+        }
+      } catch (err) {
+        console.error(err);
+        Swal.fire("Eroare", "Serverul nu răspunde", "error");
       }
     }
 
@@ -78,13 +90,15 @@
 
       list.forEach(r => {
         const tr = document.createElement("tr");
+        tr.classList.add("hover:bg-gray-50");
         tr.innerHTML = `
           <td class="border px-3 py-2">${r.email}</td>
           <td class="border px-3 py-2">${r.camera}</td>
           <td class="border px-3 py-2">${r.data}</td>
           <td class="border px-3 py-2">${r.ora}</td>
           <td class="border px-3 py-2 text-center">
-            <button onclick="deleteOne('${r.id}')" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition">
+            <button onclick="deleteOne('${r.id}')"
+              class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition">
               Șterge
             </button>
           </td>
@@ -96,25 +110,31 @@
     async function deleteOne(id) {
       const confirm = await Swal.fire({
         title: "Ești sigur?",
-        text: "Rezervarea va fi ștearsă definitiv",
+        text: "Rezervarea va fi ștearsă definitiv.",
         icon: "warning",
         showCancelButton: true,
         confirmButtonColor: "#d33",
         confirmButtonText: "Da, șterge",
+        cancelButtonText: "Anulează",
       });
       if (!confirm.isConfirmed) return;
 
-      const res = await fetch(`${BASE_URL}/admin/delete_one`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ admin_password: adminPassword, id }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        Swal.fire("Șters!", "Rezervarea a fost ștearsă.", "success");
-        loginAdmin(); // reîncarcă lista
-      } else {
-        Swal.fire("Eroare", data.error || "Eroare server", "error");
+      try {
+        const res = await fetch(`${BASE_URL}/admin/delete_one`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ admin_password: adminPassword, id }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          Swal.fire("Șters!", "Rezervarea a fost ștearsă.", "success");
+          loginAdmin();
+        } else {
+          Swal.fire("Eroare", data.error || "Eroare server", "error");
+        }
+      } catch {
+        Swal.fire("Eroare", "Serverul nu răspunde", "error");
       }
     }
 
@@ -126,20 +146,26 @@
         showCancelButton: true,
         confirmButtonColor: "#d33",
         confirmButtonText: "Da, șterge tot",
+        cancelButtonText: "Anulează",
       });
       if (!confirm.isConfirmed) return;
 
-      const res = await fetch(`${BASE_URL}/admin/delete_all`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ admin_password: adminPassword }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        Swal.fire("Șters!", "Toate rezervările au fost șterse.", "success");
-        loginAdmin();
-      } else {
-        Swal.fire("Eroare", data.error || "Eroare server", "error");
+      try {
+        const res = await fetch(`${BASE_URL}/admin/delete_all`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ admin_password: adminPassword }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          Swal.fire("Șters!", "Toate rezervările au fost șterse.", "success");
+          loginAdmin();
+        } else {
+          Swal.fire("Eroare", data.error || "Eroare server", "error");
+        }
+      } catch {
+        Swal.fire("Eroare", "Serverul nu răspunde", "error");
       }
     }
   </script>
