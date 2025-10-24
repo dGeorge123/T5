@@ -50,9 +50,28 @@
       padding: 20px 30px;
       border-bottom: 1px solid rgba(255,255,255,.2);
       text-align: center;
+      position: relative;
     }
 
     .header h1 { font-size: 1.4em; color: #dfebed; }
+
+    #myResBtn {
+      position: absolute;
+      top: 20px;
+      right: 25px;
+      background: #f78536;
+      color: #fff;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 0.85em;
+      transition: background .2s;
+    }
+
+    #myResBtn:hover { background: #ff974d; }
+
     .weekdays {
       display: flex;
       justify-content: space-between;
@@ -138,6 +157,7 @@
       <div class="header">
         <h1 id="luna"></h1>
         <h1 id="an" style="font-size:1em;opacity:.7"></h1>
+        <button id="myResBtn">Rezervările mele</button>
       </div>
       <div class="weekdays">
         <span>Lu</span><span>Ma</span><span>Mi</span><span>Jo</span>
@@ -155,33 +175,22 @@
 
   <script>
     const BASE = window.location.origin;
-    const luni = [
-      "Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie",
-      "Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"
-    ];
+    const luni = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie",
+                  "Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+    const cal = document.getElementById("cal"),
+          zile = document.getElementById("zile"),
+          ore = document.getElementById("ore"),
+          lunaLbl = document.getElementById("luna"),
+          anLbl = document.getElementById("an"),
+          dataLbl = document.getElementById("dataSelectata");
 
-    const cal = document.getElementById("cal");
-    const zile = document.getElementById("zile");
-    const ore = document.getElementById("ore");
-    const lunaLbl = document.getElementById("luna");
-    const anLbl = document.getElementById("an");
-    const dataLbl = document.getElementById("dataSelectata");
-
-    let curenta = new Date();
-    let currentDate = null;
-    let timeslotData = [];
+    let curenta = new Date(), currentDate = null;
 
     function arataCalendar() {
-      const luna = curenta.getMonth();
-      const an = curenta.getFullYear();
-      lunaLbl.textContent = luni[luna];
-      anLbl.textContent = an;
-      zile.innerHTML = "";
-
-      const prima = new Date(an, luna, 1).getDay() || 7;
-      const ultima = new Date(an, luna + 1, 0).getDate();
-      const azi = new Date();
-      azi.setHours(0,0,0,0);
+      const luna = curenta.getMonth(), an = curenta.getFullYear();
+      lunaLbl.textContent = luni[luna]; anLbl.textContent = an; zile.innerHTML = "";
+      const prima = new Date(an, luna, 1).getDay() || 7, ultima = new Date(an, luna + 1, 0).getDate();
+      const azi = new Date(); azi.setHours(0,0,0,0);
 
       for (let i = 1; i < prima; i++) {
         const gol = document.createElement("span");
@@ -194,16 +203,14 @@
         s.textContent = d;
         const data = new Date(an, luna, d);
         data.setHours(0,0,0,0);
-
         if (data < azi) s.classList.add("past");
         else s.onclick = () => deschide(an, luna, d);
-
         zile.appendChild(s);
       }
     }
 
     async function deschide(an, luna, zi) {
-      const data = `${String(zi).padStart(2,'0')}-${String(luna+1).padStart(2,'0')}-${an}`;
+      const data = `${an}-${String(luna+1).padStart(2,'0')}-${String(zi).padStart(2,'0')}`;
       dataLbl.textContent = `${zi} ${luni[luna]} ${an}`;
       cal.classList.add("flip");
       currentDate = data;
@@ -215,9 +222,8 @@
       try {
         const res = await fetch(`${BASE}/api/timeslots?date=${data}`, { credentials: "include" });
         const info = await res.json();
-        timeslotData = info.timeslots;
         renderOre(info.timeslots);
-      } catch (e) {
+      } catch {
         ore.innerHTML = "<p style='color:red'>Eroare la încărcare</p>";
       }
     }
@@ -232,7 +238,6 @@
       slots.forEach(s => {
         const ocupate = s.machines.filter(m => m.booked).length;
         const full = ocupate === 4;
-
         const div = document.createElement("div");
         div.className = `slot ${full ? 'full' : ''}`;
         div.textContent = s.time;
@@ -243,30 +248,21 @@
     }
 
     async function alegeMasina(slot) {
-      const html = slot.machines.map(m => 
+      const html = slot.machines.map(m =>
         m.booked
           ? `<button class="swal2-confirm swal2-styled" disabled
-              style="margin:5px;background:#ddd;cursor:not-allowed;
-                     color:#e74c3c;font-weight:bold;">
-              ${m.booked_by || ''}
-            </button>`
+              style="margin:5px;background:#ddd;color:#e74c3c;font-weight:bold;cursor:not-allowed;">
+              ${m.booked_by || ''}</button>`
           : `<button class="swal2-confirm swal2-styled"
               onclick="window.selectMachine('${slot.time}','${m.name}')"
-              style="margin:5px;background:#3085d6;">
-              ${m.name}
-            </button>`
+              style="margin:5px;background:#3085d6;">${m.name}</button>`
       ).join('');
-
-      await Swal.fire({
-        title: `Alege mașina pentru ora ${slot.time}`,
-        html,
-        showConfirmButton: false
-      });
+      await Swal.fire({ title:`Alege mașina pentru ora ${slot.time}`, html, showConfirmButton:false });
     }
 
     window.selectMachine = async (time, machine) => {
       const camera = localStorage.getItem("camera");
-      if (!camera) return Swal.fire("Eroare", "Camera nu este setată!", "error");
+      if (!camera) return Swal.fire("Eroare","Camera nu este setată!","error");
 
       const confirm = await Swal.fire({
         title: "Confirmi rezervarea?",
@@ -276,9 +272,7 @@
         confirmButtonText: "Da",
         cancelButtonText: "Nu"
       });
-
-      if (confirm.isConfirmed)
-        await rezervare(currentDate, time, machine, camera);
+      if (confirm.isConfirmed) await rezervare(currentDate, time, machine, camera);
     };
 
     async function rezervare(date, time, machine, room) {
@@ -291,15 +285,30 @@
         });
         const data = await res.json();
         if (data.success) {
-          await Swal.fire("Succes", "Rezervare efectuată!", "success");
+          await Swal.fire("Succes","Rezervare efectuată!","success");
           await incarcaOre(date);
-        } else {
-          Swal.fire("Eroare", data.error, "error");
-        }
+        } else Swal.fire("Eroare", data.error, "error");
       } catch {
-        Swal.fire("Eroare", "Serverul nu răspunde", "error");
+        Swal.fire("Eroare","Serverul nu răspunde","error");
       }
     }
+
+    // 🔹 Buton Rezervările mele
+    document.getElementById("myResBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch(`${BASE}/api/my_reservations`, { credentials: "include" });
+        const data = await res.json();
+        if (!data.reservations.length)
+          return Swal.fire("Nicio rezervare","Nu ai nicio rezervare activă.","info");
+        const html = data.reservations
+          .map(r => `<div style='padding:6px 0;border-bottom:1px solid #eee;'>
+                      <b>${r.date}</b> — ${r.time}, ${r.machine}</div>`)
+          .join("");
+        Swal.fire({ title:"Rezervările mele", html, width:350, confirmButtonText:"OK" });
+      } catch {
+        Swal.fire("Eroare","Serverul nu răspunde.","error");
+      }
+    });
 
     document.getElementById("back").addEventListener("click", () => cal.classList.remove("flip"));
     arataCalendar();
