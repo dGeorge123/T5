@@ -229,20 +229,34 @@
       }
     }
 
-    function renderOre(slots) {
-      ore.innerHTML = "";
-      slots.forEach(s => {
-        const div = document.createElement("div");
-        const full = s.machines.every(m => m.booked);
-        div.className = `slot ${full ? 'full' : ''}`;
-        div.textContent = s.time;
+function renderOre(slots) {
+  ore.innerHTML = "";
+  slots.forEach(s => {
+    const ocupate = s.machines.filter(m => m.booked).length;
+    const total = s.machines.length;
+    const full = ocupate === total;
 
-        div.style.background = full ? "#e74c3c" : "#27ae60";
+    // Determină culoarea în funcție de gradul de ocupare
+    let culoare;
+    if (ocupate === 0) culoare = "#27ae60";       // verde
+    else if (ocupate === 1) culoare = "#2ecc71aa"; // verde deschis
+    else if (ocupate === 2) culoare = "#f1c40f";   // galben
+    else if (ocupate === 3) culoare = "#e67e22";   // portocaliu
+    else culoare = "#e74c3c";                      // roșu (plin)
 
-        if (!full) div.onclick = () => alegeMasina(s);
-        ore.appendChild(div);
-      });
-    }
+    const div = document.createElement("div");
+    div.className = `slot ${full ? 'full' : ''}`;
+    div.textContent = s.time;
+    div.style.background = culoare;
+
+    // dacă e plin, nu se poate apăsa
+    if (!full) div.onclick = () => alegeMasina(s);
+    else div.style.cursor = "not-allowed";
+
+    ore.appendChild(div);
+  });
+}
+
 
     async function alegeMasina(slot) {
       const html = slot.machines.map(m =>
